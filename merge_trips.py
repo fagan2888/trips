@@ -3,7 +3,7 @@
 
 class TripMerger:
     """
-    Merges trips that are clearly linked
+    Merge trips that are clearly linked
 
     eg. We start the TripGenerator at 5am, but one trip is running from 4:50-5:10am.
     Then there'd be two separate trips. Since the same (route, vehicle, direction)
