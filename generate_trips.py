@@ -6,25 +6,33 @@ class TripGenerator:
 
     Process transit state files (snapshots of GPS locations
     taken every 15 seconds) (process_state)
-      - update a trip - add a vehicle snapshot to it
+      - continue a trip - add a vehicle snapshot to it
       - create a trip - current state has (vehicle, route, pattern) but not previous
     An ongoing trip (ie. we're creating it here) is (vehicle, route, pattern)
-    A trip (ie. as stored in the db) is (start_time, vehicle, route, pattern)
-    
-    A trip is essentially finished when it can no longer be continued in the
-    next transistate - the TripMerger merges trips that should've been together
+    A trip (ie. as stored in the db/S3) is (start_time, vehicle, route, pattern)
+
+    A trip is finished when it is not continued in the next transistate -
+    the TripMerger merges trips that should've been together
     """
     def __init__(agency, bucket, start_epoch, end_epoch):
         self.agency = agency
-        self.bucket = bucket
-        self.trips = {}
+        self.s3_helper = S3Helper(bucket=bucket)
         start_minute = start_epoch // 60
         end_minute = None
         if end_epoch:
             end_minute = end_epoch // 60
+        self.ongoing_trips = set()
         while end_minute == None or start_minute <= end_minute:
-            for transistate in fetch_states(minute=start_minute):
-                process_state(transistate=transistate)
+            for transistates in fetch_states(minute=start_minute):
+                processed_trips = set([
+                    process_state(transistate=transistate)
+                    for transistate in transistates
+                ])
+                finished_trips = ongoing_trips.difference(processed_trips)
+                for trip in finished_trips:
+                    self.finish_trip(trip)
+                ongoing_trips = processed_trips
+                
 
     def fetch_states(minute):
         """Fetch transistates corresponding to that minute (based on epoch)
@@ -41,30 +49,38 @@ class TripGenerator:
         """Uses transistate to extend a trip or start a new one
         :param transistate: state of a transit network
         :type transistate: dict
+        :return trip: key for an ongoing trip
+        :rtype trip: dict
         """
-        prev_trip = self.trips.get((
+        ongoing_trip = self.trips.get((
             transistate['vehicle'],
             transistate['route'],
             transistate['pattern'],
-        ))
-        if prev_trip != None
-            start_trip(transistate)
-            continue
-        transistate['start_time'] = prev_trip['start_time']
-        insert_trip(transistate)
-
-    def start_trip(transistate):
-        """Starts a new trip using that transistate
-        :param transistate: state of a transit network
-        :type transistate: dict
-        """
-        transistate['start_time'] = transistate['time']
+        ), [])
         self.trips[(
             transistate['vehicle'],
             transistate['route'],
-            transistate['pattern']
-        )] = transistate
-        insert_trip(transistate)
+            transistate['pattern'],
+        )] = ongoing_trip.append({
+            'time': transistate['time'],
+            'lat': transistate['lat'],
+            'lon': transistate['lon'],
+            'heading': transistate['heading'],
+        })
+        return (
+            transistate['vehicle'],
+            transistate['route'],
+            transistate['pattern'],
+        )
+
+    def finish_trip(trip):
+        transistates = self.trips[trip]
+        start_time = transistates[0]['start_time']
+        self.s3_helper.write(
+            path='{route}/{pattern}/{start_time}/
+        )
+
+
 
 
     
