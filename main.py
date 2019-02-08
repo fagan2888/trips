@@ -8,9 +8,21 @@
 # the last night bus is scheduled to start (usually about 5:20am for the TTC on weekdays)
 # For 24-hour routes, using the time of the first morning departure is recommended
 
+# Sample Usage:
+# python3 main.py --agency="muni" --bucket="orion-trips" --start-epoch=1549332763 --end-epoch=1549332765
+
+# Monday February 4 at 6am to Tuesday February 5 at 2:30am
+# python3 main.py --agency="ttc" --bucket="orion-trips" --start-epoch=1549278000 --end-epoch=1549351800
+
+# TODO - add option so after end-epoch it keeps going (ie. trips starting 6am-2am for ttc)
+# Do daily-dumps ONLY for trips, then it's useful (a states daily-dump is useless, remove that from orion)
+# For now, just manually run trip_generator as a batch in an ec2 box - write trips AND daily dumps
+
+# in the future, trips will be in DB, but daily dumps will still be made on S3
+
 import sys
 import getopt
-
+from generate_trips import TripGenerator
 
 def main(argv):
     try:
@@ -22,9 +34,9 @@ def main(argv):
     except getopt.GetoptError:
         print (('main.py '
         '--agency <name of agency to use>' 
-        '--bucket <name of S3 bucket to use>'
+        '--bucket <name of S3 bucket to use for trips>'
         '--start-epoch <all trips starting at or after this time, in seconds>'
-        '--end-epoch [Optional] <all trips ending at or before this time, in seconds>'
+        '--end-epoch [Optional] <last time a trip can start, in seconds>'
         ))
     for opt, arg in opts:
         if opt == '--agency':
@@ -32,13 +44,12 @@ def main(argv):
         if opt == '--bucket':
             bucket = arg
         if opt == '--start-epoch':
-            start_epoch = arg
+            start_epoch = int(arg)
         if opt == '--end-epoch':
-            end_epoch = arg
+            end_epoch = int(arg)
     trip_generator = TripGenerator(
         agency=agency,
         bucket=bucket,
-        ongoing_path=ongoing_path,
         start_epoch=start_epoch,
         end_epoch=end_epoch,
     )
